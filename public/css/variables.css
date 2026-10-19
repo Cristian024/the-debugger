@@ -1,0 +1,46 @@
+:root {
+  color-scheme: dark;
+
+  --font-pixel: "Depixel Halbfett", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --font-mono: var(--font-pixel);
+  --font-display: var(--font-pixel);
+
+  --bg-0: #020506;
+  --bg-1: #050c0f;
+  --bg-2: #0a1a20;
+  --panel: rgba(7, 20, 23, 0.94);
+  --panel-soft: rgba(12, 31, 36, 0.72);
+  --panel-edge: rgba(70, 240, 196, 0.3);
+
+  --ink: #d9f6f0;
+  --ink-dim: #83aba6;
+  --ink-faint: #4d706d;
+
+  --accent: #46f0c4;
+  --accent-strong: #9dffe6;
+  --accent-deep: #0f5c50;
+  --accent-glow: rgba(70, 240, 196, 0.35);
+
+  --danger: #ff5c6c;
+  --warning: #ffc857;
+  --blue: #5aa9ff;
+
+  --bevel-light: rgba(255, 255, 255, 0.14);
+  --bevel-dark: rgba(0, 0, 0, 0.65);
+
+  --shadow-deep: 8px 8px 0 rgba(0, 0, 0, 0.55);
+  --shadow-panel:
+    inset 0 0 0 2px rgba(2, 8, 9, 0.85), inset 0 0 0 3px rgba(255, 255, 255, 0.035),
+    8px 8px 0 rgba(0, 0, 0, 0.55), 0 0 38px rgba(70, 240, 196, 0.06);
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 2px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.7, 0, 0.2, 1);
+
+  --duration-fast: 160ms;
+  --duration: 320ms;
+  --duration-slow: 700ms;
+}

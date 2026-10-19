@@ -1,0 +1,20 @@
+{
+  "name": "the-debugger-system-failure",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Juego de simulación 2.5D con estética de terminal hospitalaria.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.1.0",
+    "js-beautify": "^2.0.3"
+  }
+}

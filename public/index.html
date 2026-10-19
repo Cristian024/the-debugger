@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#04090b" />
+    <meta
+      name="description"
+      content="The Debugger: System Failure. Simulador de diagnóstico de fallos en una unidad hospitalaria."
+    />
+    <title>The Debugger: System Failure</title>
+    <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/fonts.css" />
+    <link rel="stylesheet" href="/css/variables.css" />
+    <link rel="stylesheet" href="/css/base.css" />
+    <link rel="stylesheet" href="/css/components.css" />
+    <link rel="stylesheet" href="/css/screens.css" />
+    <link rel="stylesheet" href="/css/animations.css" />
+  </head>
+  <body>
+    <div id="app" class="app" data-screen="intro">
+      <div class="app__floor" aria-hidden="true"></div>
+      <div class="app__grain" aria-hidden="true"></div>
+      <div class="app__scanlines" aria-hidden="true"></div>
+      <div class="app__vignette" aria-hidden="true"></div>
+
+      <main id="screen-root" class="screen-root">
+        <section id="screen-intro" class="screen screen--intro" aria-label="Secuencia de arranque">
+          <div class="intro">
+            <div class="monitor" id="monitor">
+              <div class="monitor__screen" id="monitor-screen">
+                <div class="monitor__content" id="monitor-content">
+                  <div class="monitor__tag">
+                    <span>HOSPITAL CENTRAL // UNIDAD 07</span>
+                    <strong>BOOT</strong>
+                  </div>
+                  <button id="power-prompt" class="monitor__power" type="button">
+                    <span>PULSA PARA ENCENDER</span>
+                    <span class="monitor__power-cursor" id="power-cursor" aria-hidden="true">_</span>
+                  </button>
+                  <div id="boot-log" class="boot-log" role="log" aria-live="polite"></div>
+                  <div class="monitor__footer">
+                    <span class="monitor__led">
+                      <span class="dot dot--live"></span>
+                      <span id="monitor-led-text">sistema en espera</span>
+                    </span>
+                    <button id="skip-intro" class="btn-ghost" type="button">
+                      Omitir <kbd>ESPACIO</kbd>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-menu" class="screen screen--menu" aria-labelledby="game-title" hidden>
+          <div class="menu">
+            <header class="sign" id="menu-sign">
+              <p class="sign__kicker">UNIDAD DE DIAGNÓSTICO // SECTOR 07</p>
+              <h1 class="sign__title" id="game-title">
+                <span class="sign__title-main">THE DEBUGGER:</span>
+                <span class="sign__title-sub" data-text="SYSTEM FAILURE">SYSTEM FAILURE</span>
+              </h1>
+              <p class="sign__note">Todo sistema falla. Encuentra dónde.</p>
+            </header>
+
+            <nav class="menu__actions" id="menu-actions" aria-label="Menú principal">
+              <button id="btn-start" class="btn3d btn3d--primary" type="button" data-autofocus>
+                <span class="btn3d__label">EMPEZAR</span>
+                <span class="btn3d__meta">NUEVO DIAGNÓSTICO</span>
+              </button>
+              <button id="btn-continue" class="btn3d btn3d--ghost" type="button" hidden>
+                <span class="btn3d__label">CONTINUAR</span>
+                <span class="btn3d__meta">SESIÓN GUARDADA</span>
+              </button>
+            </nav>
+
+            <aside class="menu__status panel" id="menu-status" aria-label="Estado de la sesión">
+              <div class="readout">
+                <span>Operador</span>
+                <strong id="status-operator">—</strong>
+              </div>
+              <div class="readout">
+                <span>Día</span>
+                <strong id="status-day">01</strong>
+              </div>
+              <div class="readout">
+                <span>Integridad</span>
+                <strong id="status-integrity">100%</strong>
+              </div>
+              <div class="readout">
+                <span>Último guardado</span>
+                <strong id="status-saved">SIN REGISTRO</strong>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section
+          id="screen-cinematic"
+          class="screen screen--cinematic"
+          aria-labelledby="cinematic-title"
+          hidden
+        >
+          <div class="cinematic">
+            <div id="cinematic-frame" class="cinematic__frame panel">
+              <div class="cinematic__meta">
+                <span>ARCHIVO DE INGRESO // UNIDAD 07</span>
+                <span id="cinematic-counter">01 / 04</span>
+              </div>
+
+              <div id="cinematic-image" class="cinematic-image-placeholder">
+                <span class="cinematic-image-placeholder__scan" aria-hidden="true"></span>
+                <span class="cinematic-image-placeholder__label" id="cinematic-image-label">
+                  IMAGEN PENDIENTE
+                </span>
+              </div>
+
+              <div id="cinematic-copy" class="cinematic__copy">
+                <h2 id="cinematic-title">EL TURNO QUE NADIE QUIERE</h2>
+                <p id="cinematic-text">
+                  El turno nocturno no respondió. La supervisora te entrega una tableta con el
+                  registro de fallos del Hospital Central y una sola instrucción: no dejes que el
+                  sistema se apague.
+                </p>
+              </div>
+
+              <div class="cinematic__footer">
+                <span class="cinematic__hint">REGISTRO CLASIFICADO // NIVEL 2</span>
+                <button id="btn-next" class="cinematic__next" type="button" data-autofocus>
+                  <span>SIGUIENTE</span>
+                  <span id="cinematic-cursor" class="cinematic__cursor" aria-hidden="true">▶</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-game" class="screen screen--game" aria-label="Unidad de diagnóstico" hidden>
+          <div class="game">
+            <header class="game__bar panel">
+              <div class="game__id">
+                <span class="dot dot--live"></span>
+                <strong>UNIDAD 07</strong>
+                <span class="muted">/ turno de diagnóstico</span>
+              </div>
+              <div class="game__metrics">
+                <span>Día <strong id="game-day">01</strong></span>
+                <span>Integridad <strong id="game-integrity">100%</strong></span>
+                <span>Pruebas <strong id="game-tests">—</strong></span>
+              </div>
+              <div class="game__bar-actions">
+                <button id="btn-news" class="btn-ghost" type="button">Noticias</button>
+                <button id="btn-save" class="btn-ghost" type="button">Guardar</button>
+                <button id="btn-menu" class="btn-ghost" type="button">Menú</button>
+              </div>
+            </header>
+
+            <div class="game__objective panel" id="game-objective">
+              <span class="game__objective-label">Objetivo del día</span>
+              <p class="game__objective-text" id="objective-text">Esperando el primer informe del Director...</p>
+            </div>
+
+            <div class="game__grid">
+              <aside class="panel sidebar" aria-label="Explorador de archivos">
+                <h2 class="panel__title">ARCHIVOS // SISTEMA</h2>
+                <div class="env__visual" aria-hidden="true">
+                  <canvas id="game-canvas" class="env__canvas">Tu navegador no soporta canvas.</canvas>
+                </div>
+                <ul class="file-list" id="file-list"></ul>
+              </aside>
+
+              <section class="panel ide" aria-label="Editor de código">
+                <div class="ide__head">
+                  <h2 class="panel__title">EDITOR // SISTEMA</h2>
+                  <span class="ide__file" id="ide-file">main.js</span>
+                </div>
+                <div class="ide__code">
+                  <pre id="ide-highlight" class="ide__highlight" aria-hidden="true"><code></code></pre>
+                  <textarea
+                    id="ide-editor"
+                    class="ide__editor"
+                    spellcheck="false"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    autocorrect="off"
+                    wrap="off"
+                    aria-label="Editor de código"
+                  ></textarea>
+                </div>
+                <div class="ide__actions">
+                  <button id="btn-run" class="btn-ghost" type="button">Ejecutar y Depurar</button>
+                  <button id="btn-upload" class="btn-ghost btn-ghost--primary" type="button">
+                    Subir a Producción
+                  </button>
+                </div>
+              </section>
+
+              <section class="panel console" id="game-console" aria-label="Consola de salida">
+                <header class="console__head">
+                  <h2 class="panel__title">CONSOLA // SALIDA</h2>
+                  <button id="btn-console-toggle" class="btn-ghost btn-ghost--tiny" type="button">
+                    Ampliar
+                  </button>
+                </header>
+                <div id="game-log" class="console__log" role="log" aria-live="polite"></div>
+              </section>
+            </div>
+
+            <div id="game-loading" class="game__loading" hidden>
+              <div class="game__loading-inner">
+                <span class="game__loading-label">CARGANDO INTERFAZ DE DIAGNÓSTICO...</span>
+                <div class="game__loading-bar"><span id="game-loading-progress"></span></div>
+                <span class="game__loading-meta">UNIDAD 07 // INICIALIZANDO SENSORES</span>
+              </div>
+            </div>
+
+            <section id="news-panel" class="news-panel panel" aria-label="Archivo de noticias" hidden>
+              <header class="news-panel__head">
+                <h2 class="panel__title">ARCHIVO // NOTICIAS</h2>
+                <button id="btn-news-close" class="btn-ghost btn-ghost--tiny" type="button">Cerrar</button>
+              </header>
+              <div class="news-panel__body">
+                <nav id="news-days" class="news-days" aria-label="Días registrados"></nav>
+                <article id="news-entry" class="news-entry"></article>
+              </div>
+            </section>
+
+            <div id="briefing" class="briefing" hidden>
+              <div id="briefing-card" class="briefing__card panel">
+                <div id="briefing-aftermath" class="briefing__step">
+                  <span class="briefing__tag">Resultado del turno</span>
+                  <p id="briefing-consequences" class="briefing__text"></p>
+                  <span id="briefing-tests" class="briefing__tests"></span>
+                  <button id="btn-briefing-skip" class="btn-ghost btn-ghost--primary" type="button">
+                    Saltar
+                  </button>
+                </div>
+                <div id="briefing-day" class="briefing__step" hidden>
+                  <span class="briefing__tag">Turno asignado</span>
+                  <p id="briefing-day-number" class="briefing__day">DÍA 01</p>
+                  <p id="briefing-objective" class="briefing__objective"></p>
+                  <button id="btn-briefing-start" class="btn-ghost btn-ghost--primary" type="button">
+                    Comenzar diagnóstico
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screen-gameover" class="screen screen--gameover" aria-labelledby="gameover-title" hidden>
+          <div class="gameover">
+            <div class="gameover__frame panel">
+              <span class="gameover__badge" id="gameover-badge">PROTOCOLO DE EMERGENCIA</span>
+              <h2 class="gameover__title" id="gameover-title">FIN DEL TURNO</h2>
+              <p class="gameover__text" id="gameover-text"></p>
+              <div class="gameover__actions">
+                <button id="btn-restart" class="btn3d btn3d--ghost" type="button" data-autofocus>
+                  <span class="btn3d__label">REINICIAR</span>
+                  <span class="btn3d__meta">NUEVO INGRESO</span>
+                </button>
+                <button id="btn-gameover-menu" class="btn-ghost" type="button">Volver al menú</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="hud">
+        <span class="hud__item"><span class="dot" id="hud-dot"></span><span id="hud-link">enlace local</span></span>
+        <span class="hud__item" id="hud-clock">--:--:--</span>
+        <span class="hud__item">v0.2.0</span>
+      </footer>
+    </div>
+
+    <noscript>
+      <p class="noscript">Este simulador requiere JavaScript para iniciar la unidad de diagnóstico.</p>
+    </noscript>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script type="module" src="/js/main.js"></script>
+  </body>
+</html>

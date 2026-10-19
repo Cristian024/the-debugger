@@ -1,0 +1,10 @@
+@font-face {
+  font-family: "Depixel Halbfett";
+  src:
+    url("../assets/fonts/depixel/depixelhalbfett.woff2") format("woff2"),
+    url("../assets/fonts/depixel/depixelhalbfett.woff") format("woff"),
+    url("../assets/fonts/depixel/DePixelHalbfett.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
