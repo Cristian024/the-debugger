@@ -61,5 +61,5 @@ jobs:
         with:
           app-name: 'TheDebugger'
           slot-name: 'Production'
-          package: .
+          startup-command: 'node server/index.js'
           
