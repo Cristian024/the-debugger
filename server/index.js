@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import apiRouter from './routes/api.js';
 import { adapterNames, closeLogging, getLogger, requestLogger } from './logger/index.js';
+import { closeMongo } from './db/mongo.js';
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(currentDir, '..', 'public');
@@ -91,6 +92,7 @@ async function shutdown(signal) {
   console.log(`[server] ${signal} recibido. Cerrando servidor...`);
   logger.info('server.shutdown', { signal });
 
+  await closeMongo();
   await closeLogging();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000).unref();

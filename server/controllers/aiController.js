@@ -1,5 +1,6 @@
 import beautify from 'js-beautify';
 import { getLogger } from '../logger/index.js';
+import { recordLlmUsage } from '../services/llmUsageService.js';
 
 const logger = getLogger('aiController.js');
 
@@ -259,14 +260,23 @@ async function callGemini(prompt) {
       parsed = JSON.parse(match[0]);
     }
 
+    const promptTokens = data?.usageMetadata?.promptTokenCount ?? null;
+    const outputTokens = data?.usageMetadata?.candidatesTokenCount ?? null;
+    const totalTokens = data?.usageMetadata?.totalTokenCount ?? (promptTokens ?? 0) + (outputTokens ?? 0);
+
     logger.info('gemini.request.success', {
       finishReason,
       textChars: text.length,
-      promptTokens: data?.usageMetadata?.promptTokenCount,
-      outputTokens: data?.usageMetadata?.candidatesTokenCount,
+      promptTokens,
+      outputTokens,
+      totalTokens,
     });
 
-    return validatePayload(parsed);
+    return {
+      payload: validatePayload(parsed),
+      usage: { promptTokens, outputTokens, totalTokens },
+      finishReason,
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -440,6 +450,8 @@ export async function generateNextDay(req, res) {
   const prompt = buildUserPrompt({ day, previousFiles, testResults });
   let payload;
   let provider;
+  let usage = null;
+  let finishReason = null;
 
   logger.info('game.nextday.request', {
     day,
@@ -458,7 +470,10 @@ export async function generateNextDay(req, res) {
       provider = 'mock';
       logger.warn('gemini.skipped', { day, reason: 'missing_api_key' });
     } else {
-      payload = await callGemini(prompt);
+      const result = await callGemini(prompt);
+      payload = result.payload;
+      usage = result.usage;
+      finishReason = result.finishReason;
       provider = 'gemini';
     }
   } catch (error) {
@@ -468,6 +483,24 @@ export async function generateNextDay(req, res) {
   }
 
   const latencyMs = Math.round(Number(process.hrtime.bigint() - startedAt) / 1e6);
+
+  let requestCount = null;
+
+  try {
+    requestCount = await recordLlmUsage({
+      day,
+      provider,
+      model: provider === 'gemini' ? DEFAULT_MODEL : 'local-fallback',
+      status: payload.status,
+      latencyMs,
+      finishReason,
+      promptTokens: usage?.promptTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null,
+    });
+  } catch (error) {
+    logger.error('llm.usage.record.failed', { error: error.message });
+  }
 
   logger.info('game.nextday.response', {
     day,
@@ -485,6 +518,7 @@ export async function generateNextDay(req, res) {
     provider,
     model: provider === 'gemini' ? DEFAULT_MODEL : 'local-fallback',
     day,
+    requestCount,
     ...payload,
   });
 }
