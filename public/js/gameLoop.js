@@ -1,9 +1,36 @@
 import { api } from './network.js';
-import { addHistory, clearHistory, getState, setState, updateChallenge, updateProgress } from './state.js';
-import { appendGameLog, hideGameBusy, setGameOver, showAftermath, showDayReveal, showGameBusy } from './ui.js';
+import {
+  addHistory,
+  addSubmission,
+  getState,
+  setState,
+  updateChallenge,
+  updateProgress,
+  updateStats,
+} from './state.js';
+import {
+  appendGameLog,
+  hideGameBusy,
+  resetTurnTimer,
+  setFinalFeedback,
+  setGameOver,
+  showAftermath,
+  showDayReveal,
+  showGameBusy,
+  startTurnTimer,
+  stopTurnTimer,
+} from './ui.js';
+
+const WIN_DAYS = 5;
+const MAX_ERRORS = 10;
+const TURN_MS =
+  Number(globalThis.__DEBUGGER_TURN_MS__) > 0
+    ? Number(globalThis.__DEBUGGER_TURN_MS__)
+    : 10 * 60 * 1000;
 
 let ide = null;
 let busy = false;
+let ending = false;
 
 export function initGameLoop(ideInstance) {
   ide = ideInstance;
@@ -19,6 +46,7 @@ function resetChallengeDraft() {
     validation: '',
     status: 'idle',
     passed: null,
+    deadline: 0,
   };
 }
 
@@ -42,14 +70,80 @@ function loadChallenge(challenge) {
   }
 }
 
-function gameOver(narrative) {
+function startTimer(deadline) {
+  const effective = deadline && deadline > Date.now() ? deadline : Date.now() + TURN_MS;
+  updateChallenge({ deadline: effective });
+  startTurnTimer(effective, handleTurnTimeout);
+}
+
+async function handleTurnTimeout() {
+  if (busy || ending) {
+    return;
+  }
+
+  appendGameLog('TIEMPO AGOTADO · desplegando el sistema automáticamente...', 'warn');
+  await uploadToProduction({ timedOut: true });
+}
+
+function localFeedback(outcome, errors, daysCompleted) {
+  const base = outcome === 'victory' ? 8 : 3;
+  const penalty = Math.min(6, Math.floor(errors / 2));
+  const score = Math.max(1, Math.min(10, base + Math.min(2, daysCompleted) - penalty));
+
+  return {
+    score,
+    feedback:
+      outcome === 'victory'
+        ? `Completaste ${daysCompleted} turnos y el hospital sigue operativo. Acumulaste ${errors} fallo(s) de producción.`
+        : `El turno terminó antes de completar los cinco días. Días completados: ${daysCompleted}. Fallos de producción: ${errors}.`,
+    notes:
+      errors > 0
+        ? 'Revisa cómo viajan los datos entre módulos: un tipo incorrecto puede fallar varios pasos después.'
+        : 'Sigue el flujo de datos entre archivos antes de tocar código.',
+  };
+}
+
+async function endGame(outcome, narrative) {
+  if (ending) {
+    return;
+  }
+
+  ending = true;
+  stopTurnTimer();
+
+  const { stats, submissions } = getState();
+
   setState((draft) => ({
     ...draft,
     screen: 'gameover',
-    progress: { ...draft.progress, phase: 'game_over' },
+    progress: { ...draft.progress, phase: outcome === 'victory' ? 'victory' : 'game_over' },
+    challenge: { ...draft.challenge, status: outcome === 'victory' ? 'victory' : 'game_over' },
   }));
 
-  setGameOver({ status: 'game_over', narrative });
+  setGameOver({ outcome, narrative });
+
+  try {
+    const result = await api.feedback({
+      outcome,
+      errors: stats.errors,
+      daysCompleted: stats.daysCompleted,
+      submissions: submissions.map((submission) => ({
+        day: submission.day,
+        passed: submission.passed,
+        files: submission.files,
+      })),
+    });
+
+    setFinalFeedback({
+      feedback: result.feedback,
+      notes: result.notes,
+      score: result.score,
+    });
+  } catch (error) {
+    const fallback = localFeedback(outcome, stats.errors, stats.daysCompleted);
+    setFinalFeedback(fallback);
+    appendGameLog(`No se pudo obtener la evaluación final: ${error.message}`, 'warn');
+  }
 }
 
 async function handleResponse(data, requestDay, testResults) {
@@ -60,7 +154,7 @@ async function handleResponse(data, requestDay, testResults) {
     addHistory({ day: reportDay, consequences, incident: newBugContext, status, passed: testResults });
     updateChallenge({ status, consequences, passed: testResults });
     appendGameLog('El Director ha dictado sentencia.', 'warn');
-    gameOver(consequences);
+    await endGame('game_over', consequences);
     return;
   }
 
@@ -76,6 +170,7 @@ async function handleResponse(data, requestDay, testResults) {
     validation: validationLogic,
     status,
     passed: testResults,
+    deadline: 0,
   });
   updateProgress({ day, phase: 'diagnostics' });
 
@@ -99,6 +194,7 @@ async function handleResponse(data, requestDay, testResults) {
   appendGameLog('Diagnóstico automático del sistema:', 'info');
 
   await autoRun();
+  startTimer(Date.now() + TURN_MS);
 }
 
 async function requestDay({ day, previousFiles, testResults }) {
@@ -111,11 +207,15 @@ async function requestDay({ day, previousFiles, testResults }) {
 }
 
 export async function startNewGame() {
-  clearHistory();
+  ending = false;
+  resetTurnTimer();
 
   setState((draft) => ({
     ...draft,
     challenge: resetChallengeDraft(),
+    history: [],
+    stats: { errors: 0, daysCompleted: 0 },
+    submissions: [],
     progress: { ...draft.progress, day: 1, phase: 'diagnostics', integrity: 100 },
   }));
 
@@ -143,6 +243,7 @@ export async function startNewGame() {
 }
 
 export async function resumeGame() {
+  ending = false;
   const { challenge } = getState();
 
   if (challenge && challenge.files && Object.keys(challenge.files).length > 0) {
@@ -150,30 +251,73 @@ export async function resumeGame() {
     appendGameLog(`Turno ${challenge.day} restaurado desde el último guardado.`, 'ok');
     appendGameLog('Diagnóstico automático del sistema:', 'info');
     await autoRun();
+
+    if (challenge.deadline && challenge.deadline <= Date.now()) {
+      appendGameLog('El tiempo del turno ya había expirado. Desplegando sistema...', 'warn');
+      await handleTurnTimeout();
+      return;
+    }
+
+    startTimer(challenge.deadline);
     return;
   }
 
   await startNewGame();
 }
 
-export async function uploadToProduction() {
-  if (busy || !ide) {
+export async function uploadToProduction({ timedOut = false } = {}) {
+  if (busy || ending || !ide) {
     return;
   }
 
+  stopTurnTimer();
   busy = true;
-  const { challenge } = getState();
+  const { challenge, stats } = getState();
 
   try {
     const result = await ide.run({ validate: true });
     const passed = result.passed === true;
     const submission = ide.collect();
+    const nextStats = {
+      errors: stats.errors + (passed ? 0 : 1),
+      daysCompleted: stats.daysCompleted + 1,
+    };
 
     updateChallenge({ passed });
+    addSubmission({
+      day: challenge.day,
+      passed,
+      files: submission.files,
+      at: new Date().toISOString(),
+    });
+    updateStats(nextStats);
+
     appendGameLog(
       passed ? 'Pruebas de producción superadas.' : 'Pruebas de producción fallidas.',
       passed ? 'ok' : 'warn',
     );
+
+    if (timedOut) {
+      appendGameLog('El turno se cerró por tiempo agotado.', 'warn');
+    }
+
+    if (nextStats.errors >= MAX_ERRORS) {
+      appendGameLog(`Límite de ${MAX_ERRORS} errores alcanzado.`, 'error');
+      await endGame(
+        'game_over',
+        `Acumulaste ${nextStats.errors} errores de producción. El Director revoca tu turno: estás despedido de la Unidad 07.`,
+      );
+      return;
+    }
+
+    if (challenge.day >= WIN_DAYS) {
+      await endGame(
+        'victory',
+        `Completaste los ${WIN_DAYS} días. El hospital sigue operativo y el Director firma tu alta como Operador de Diagnóstico.`,
+      );
+      return;
+    }
+
     appendGameLog('Subiendo el sistema a producción...', 'info');
     showGameBusy('EL DIRECTOR EVALÚA TU SISTEMA...');
 

@@ -54,6 +54,7 @@ async function request(path, { method = 'GET', body, timeout = DEFAULT_TIMEOUT }
 export const api = {
   health: () => request('/health'),
   nextDay: (payload) => request('/game/next-day', { method: 'POST', body: payload, timeout: 40000 }),
+  feedback: (payload) => request('/game/feedback', { method: 'POST', body: payload, timeout: 40000 }),
   generateLog: (payload) => request('/llm/generate', { method: 'POST', body: payload }),
   save: (payload) => request('/save', { method: 'POST', body: payload }),
   load: ({ playerId, slot = 'autosave' }) =>

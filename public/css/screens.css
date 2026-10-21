@@ -513,6 +513,19 @@
   font-weight: 400;
 }
 
+#game-timer {
+  font-variant-numeric: tabular-nums;
+}
+
+#game-timer[data-state="warning"] {
+  color: var(--warning);
+}
+
+#game-timer[data-state="critical"] {
+  color: var(--danger);
+  text-shadow: 0 0 12px rgba(255, 92, 108, 0.6);
+}
+
 .game__stage {
   position: relative;
   min-height: 260px;
@@ -1379,6 +1392,77 @@
   font-size: 0.86rem;
   line-height: 1.8;
   color: #ffc9cf;
+}
+
+.gameover__result {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(70, 240, 196, 0.18);
+  background: rgba(3, 12, 14, 0.62);
+}
+
+.gameover__score-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gameover__score {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+  color: var(--accent-strong);
+  text-shadow:
+    3px 3px 0 rgba(0, 0, 0, 0.85),
+    0 0 26px rgba(70, 240, 196, 0.35);
+}
+
+.gameover__score small {
+  font-size: 0.4em;
+  color: var(--ink-faint);
+}
+
+.gameover__feedback {
+  max-width: 64ch;
+  font-size: 0.84rem;
+  line-height: 1.75;
+  color: var(--ink);
+}
+
+.gameover__notes {
+  max-width: 64ch;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
+
+.gameover__frame[data-outcome="victory"] {
+  border-color: rgba(70, 240, 196, 0.7);
+  background: linear-gradient(180deg, rgba(7, 36, 30, 0.97), rgba(3, 14, 12, 0.99));
+  box-shadow:
+    0 0 0 2px #020607,
+    12px 12px 0 rgba(0, 0, 0, 0.72),
+    0 0 70px rgba(70, 240, 196, 0.22);
+}
+
+.gameover__frame[data-outcome="victory"] .gameover__badge {
+  border-color: var(--accent);
+  background: rgba(7, 60, 50, 0.55);
+  color: var(--accent-strong);
+}
+
+.gameover__frame[data-outcome="victory"] .gameover__title {
+  color: var(--accent-strong);
+  text-shadow:
+    3px 3px 0 rgba(0, 0, 0, 0.85),
+    0 0 34px rgba(70, 240, 196, 0.5);
+}
+
+.gameover__frame[data-outcome="victory"] .gameover__text {
+  color: var(--ink);
 }
 
 .gameover__actions {

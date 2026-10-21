@@ -64,6 +64,10 @@ let historyEntries = [];
 let newsSelectedDay = null;
 let aftermathResolve = null;
 let dayRevealResolve = null;
+let turnTimer = null;
+let turnDeadline = 0;
+let turnExpiredCallback = null;
+let turnExpired = false;
 
 function prefersReducedMotion() {
   return false;
@@ -606,6 +610,10 @@ export function hideGameBusy() {
 }
 
 function onScreenShown(name) {
+  if (name !== 'game') {
+    stopTurnTimer();
+  }
+
   if (name !== 'menu') {
     stopMenuIdle();
   }
@@ -825,8 +833,13 @@ export function initUI(callbacks = {}) {
   refs.gameoverTitle = document.querySelector('#gameover-title');
   refs.gameoverText = document.querySelector('#gameover-text');
   refs.gameoverFrame = document.querySelector('.gameover__frame');
+  refs.gameoverScore = document.querySelector('#gameover-score');
+  refs.gameoverFeedback = document.querySelector('#gameover-feedback');
+  refs.gameoverNotes = document.querySelector('#gameover-notes');
   refs.restart = document.querySelector('#btn-restart');
   refs.gameoverMenu = document.querySelector('#btn-gameover-menu');
+
+  refs.gameTimer = document.querySelector('#game-timer');
 
   refs.statusFields = {
     operator: document.querySelector('#status-operator'),
@@ -1071,6 +1084,56 @@ export function toggleConsole() {
   }
 }
 
+function renderTurnTimer() {
+  if (!refs.gameTimer) {
+    return;
+  }
+
+  const remaining = Math.max(0, turnDeadline - Date.now());
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+
+  refs.gameTimer.textContent = `${minutes}:${seconds}`;
+  refs.gameTimer.dataset.state =
+    totalSeconds <= 30 ? 'critical' : totalSeconds <= 60 ? 'warning' : '';
+
+  if (remaining <= 0 && !turnExpired) {
+    turnExpired = true;
+    const callback = turnExpiredCallback;
+    stopTurnTimer();
+    callback?.();
+  }
+}
+
+export function startTurnTimer(deadline, onExpire) {
+  stopTurnTimer();
+  turnDeadline = Number(deadline) || Date.now();
+  turnExpiredCallback = onExpire;
+  turnExpired = false;
+  renderTurnTimer();
+  turnTimer = window.setInterval(renderTurnTimer, 250);
+}
+
+export function stopTurnTimer() {
+  if (turnTimer) {
+    window.clearInterval(turnTimer);
+    turnTimer = null;
+  }
+}
+
+export function resetTurnTimer() {
+  stopTurnTimer();
+  turnDeadline = 0;
+  turnExpiredCallback = null;
+  turnExpired = false;
+
+  if (refs.gameTimer) {
+    refs.gameTimer.textContent = '--:--';
+    refs.gameTimer.dataset.state = '';
+  }
+}
+
 function setBriefing(mode) {
   if (refs.briefingAftermath) {
     refs.briefingAftermath.hidden = mode !== 'aftermath';
@@ -1156,13 +1219,31 @@ function resolveDayReveal() {
 }
 
 const GAMEOVER_COPY = {
-  game_over: { title: 'SISTEMA CLAUSURADO', badge: 'PROTOCOLO DE EMERGENCIA // TURNO REVOCADO' },
-  game_over_fired: { title: 'PACIENTE FALLECIDO', badge: 'PROTOCOLO CERO // ÓBITO REGISTRADO' },
-  game_over_jail: { title: 'DETENIDO POR NEGLIGENCIA', badge: 'CUSTODIA // NEGLIGENCIA PROBADA' },
+  victory: {
+    title: 'ALTA MÉDICA',
+    badge: 'TURNO COMPLETADO // 5 DÍAS',
+    text: 'Superaste los cinco días. El hospital sigue operativo y tu turno queda cerrado.',
+  },
+  game_over: {
+    title: 'SISTEMA CLAUSURADO',
+    badge: 'PROTOCOLO DE EMERGENCIA // TURNO REVOCADO',
+    text: 'El sistema ha clausurado tu turno.',
+  },
+  game_over_fired: {
+    title: 'PACIENTE FALLECIDO',
+    badge: 'PROTOCOLO CERO // ÓBITO REGISTRADO',
+    text: 'El sistema ha clausurado tu turno.',
+  },
+  game_over_jail: {
+    title: 'DETENIDO POR NEGLIGENCIA',
+    badge: 'CUSTODIA // NEGLIGENCIA PROBADA',
+    text: 'El sistema ha clausurado tu turno.',
+  },
 };
 
-export function setGameOver({ status = 'game_over', narrative = '' } = {}) {
-  const copy = GAMEOVER_COPY[status] ?? GAMEOVER_COPY.game_over;
+export function setGameOver({ status = 'game_over', outcome = '', narrative = '' } = {}) {
+  const key = outcome === 'victory' || status === 'victory' ? 'victory' : status;
+  const copy = GAMEOVER_COPY[key] ?? GAMEOVER_COPY.game_over;
 
   if (refs.gameoverBadge) {
     refs.gameoverBadge.textContent = copy.badge;
@@ -1173,7 +1254,23 @@ export function setGameOver({ status = 'game_over', narrative = '' } = {}) {
   }
 
   if (refs.gameoverText) {
-    refs.gameoverText.textContent = narrative || 'El sistema ha clausurado tu turno.';
+    refs.gameoverText.textContent = narrative || copy.text;
+  }
+
+  if (refs.gameoverFrame) {
+    refs.gameoverFrame.dataset.outcome = key === 'victory' ? 'victory' : 'game_over';
+  }
+
+  if (refs.gameoverScore) {
+    refs.gameoverScore.innerHTML = '—<small>/10</small>';
+  }
+
+  if (refs.gameoverFeedback) {
+    refs.gameoverFeedback.textContent = 'La IA está evaluando tus soluciones...';
+  }
+
+  if (refs.gameoverNotes) {
+    refs.gameoverNotes.textContent = '';
   }
 
   if (gsap && refs.gameoverFrame && !prefersReducedMotion()) {
@@ -1181,6 +1278,28 @@ export function setGameOver({ status = 'game_over', narrative = '' } = {}) {
       refs.gameoverFrame,
       { opacity: 0, y: 20 },
       { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out', clearProps: 'opacity,transform' },
+    );
+  }
+}
+
+export function setFinalFeedback({ feedback = '', notes = '', score = null } = {}) {
+  if (refs.gameoverScore) {
+    refs.gameoverScore.innerHTML = `${Number.isFinite(score) ? score : '—'}<small>/10</small>`;
+  }
+
+  if (refs.gameoverFeedback) {
+    refs.gameoverFeedback.textContent = feedback || 'Sin retroalimentación disponible.';
+  }
+
+  if (refs.gameoverNotes) {
+    refs.gameoverNotes.textContent = notes || '';
+  }
+
+  if (gsap && refs.gameoverFeedback && !prefersReducedMotion()) {
+    gsap.fromTo(
+      [refs.gameoverScore, refs.gameoverFeedback, refs.gameoverNotes].filter(Boolean),
+      { opacity: 0, y: 6 },
+      { opacity: 1, y: 0, duration: 0.35, stagger: 0.06, ease: 'power1.out', clearProps: 'opacity,transform' },
     );
   }
 }

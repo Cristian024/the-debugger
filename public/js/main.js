@@ -1,5 +1,5 @@
 import { getState, setState, subscribe, updateSession } from './state.js';
-import { appendGameLog, initUI, renderUI, setConnection } from './ui.js';
+import { appendGameLog, initUI, renderUI, setConnection, stopTurnTimer } from './ui.js';
 import { IsoEngine } from './engine.js';
 import { api } from './network.js';
 import { createIDE } from './ide.js';
@@ -103,6 +103,7 @@ async function saveRun() {
 }
 
 function exitToMenu() {
+  stopTurnTimer();
   setState({ screen: 'menu' });
   console.log('[The Debugger] Regreso al menú principal', getState().progress);
 }

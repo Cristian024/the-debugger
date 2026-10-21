@@ -147,6 +147,7 @@
               </div>
               <div class="game__metrics">
                 <span>Día <strong id="game-day">01</strong></span>
+                <span>Turno <strong id="game-timer">--:--</strong></span>
                 <span>Integridad <strong id="game-integrity">100%</strong></span>
                 <span>Pruebas <strong id="game-tests">—</strong></span>
               </div>
@@ -256,6 +257,14 @@
               <span class="gameover__badge" id="gameover-badge">PROTOCOLO DE EMERGENCIA</span>
               <h2 class="gameover__title" id="gameover-title">FIN DEL TURNO</h2>
               <p class="gameover__text" id="gameover-text"></p>
+              <div class="gameover__result">
+                <span class="gameover__score-label">Calificación final</span>
+                <span class="gameover__score" id="gameover-score">—<small>/10</small></span>
+                <p class="gameover__feedback" id="gameover-feedback">
+                  La IA está evaluando tus soluciones...
+                </p>
+                <p class="gameover__notes" id="gameover-notes"></p>
+              </div>
               <div class="gameover__actions">
                 <button id="btn-restart" class="btn3d btn3d--ghost" type="button" data-autofocus>
                   <span class="btn3d__label">REINICIAR</span>

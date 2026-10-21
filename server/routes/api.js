@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import llmRouter from './llm.routes.js';
 import saveRouter from './save.routes.js';
-import { generateNextDay } from '../controllers/aiController.js';
+import { generateFeedback, generateNextDay } from '../controllers/aiController.js';
 
 const router = Router();
 
@@ -17,6 +17,7 @@ router.get('/health', (req, res) => {
 });
 
 router.post('/game/next-day', generateNextDay);
+router.post('/game/feedback', generateFeedback);
 
 router.use('/llm', llmRouter);
 router.use('/', saveRouter);

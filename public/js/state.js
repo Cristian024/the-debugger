@@ -32,12 +32,34 @@ function createInitialState() {
       validation: '',
       status: 'idle',
       passed: null,
+      deadline: 0,
     },
     history: [],
+    stats: {
+      errors: 0,
+      daysCompleted: 0,
+    },
+    submissions: [],
     settings: {
       audio: true,
     },
   };
+}
+
+function normalizeSubmissions(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => ({
+      day: Number.isFinite(entry.day) ? Math.max(1, Math.trunc(entry.day)) : 1,
+      passed: entry.passed === true,
+      files: normalizeChallengeFiles(entry.files),
+      at: typeof entry.at === 'string' ? entry.at : new Date().toISOString(),
+    }))
+    .slice(-20);
 }
 
 function normalizeHistory(value) {
@@ -106,8 +128,16 @@ function normalize(candidate) {
       validation: typeof challenge.validation === 'string' ? challenge.validation : '',
       status: typeof challenge.status === 'string' ? challenge.status : 'idle',
       passed: challenge.passed === true || challenge.passed === false ? challenge.passed : null,
+      deadline: Number.isFinite(challenge.deadline) ? challenge.deadline : 0,
     },
     history: normalizeHistory(candidate.history),
+    stats: {
+      errors: Number.isFinite(candidate.stats?.errors) ? Math.max(0, Math.trunc(candidate.stats.errors)) : 0,
+      daysCompleted: Number.isFinite(candidate.stats?.daysCompleted)
+        ? Math.max(0, Math.trunc(candidate.stats.daysCompleted))
+        : 0,
+    },
+    submissions: normalizeSubmissions(candidate.submissions),
     settings: {
       audio: settings.audio !== false,
     },
@@ -216,6 +246,8 @@ export function resetProgress() {
     progress: fresh.progress,
     challenge: fresh.challenge,
     history: [],
+    stats: fresh.stats,
+    submissions: [],
     session: {
       ...draft.session,
       startedAt: null,
@@ -233,6 +265,28 @@ export function addHistory(entry) {
 
 export function clearHistory() {
   return setState({ history: [] });
+}
+
+export function updateStats(patch) {
+  return setState((draft) => ({
+    ...draft,
+    stats: { ...draft.stats, ...patch },
+  }));
+}
+
+export function addSubmission(entry) {
+  return setState((draft) => ({
+    ...draft,
+    submissions: [...draft.submissions, entry].slice(-20),
+  }));
+}
+
+export function resetGameProgress() {
+  return setState((draft) => ({
+    ...draft,
+    stats: { errors: 0, daysCompleted: 0 },
+    submissions: [],
+  }));
 }
 
 export function updateChallenge(patch) {

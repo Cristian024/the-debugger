@@ -282,6 +282,254 @@ async function callGemini(prompt) {
   }
 }
 
+const FEEDBACK_SYSTEM_INSTRUCTION = [
+  'Eres el Director del Hospital Central y el Sistema Operativo de la Unidad 07.',
+  'Evalúas el desempeño final del operador con tono clínico, burocrático y directo, en español.',
+  'Analiza si sus soluciones resolvieron fallos sistémicos entre módulos, si aprovechó el diagnóstico y cuál fue el resultado global.',
+  'Responde SOLO con un objeto JSON: { "summary": "...", "score": 1-10, "notes": "..." }.',
+  'score es un entero de 1 a 10: 1 pésimo, 10 excelente. Considera días completados, fallos y calidad del enfoque.',
+  'summary: 2 a 4 frases de retroalimentación concreta. notes: recomendación breve para el operador.',
+].join('\n');
+
+const FEEDBACK_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    score: { type: 'integer' },
+    notes: { type: 'string' },
+  },
+  required: ['summary', 'score'],
+  propertyOrdering: ['summary', 'score', 'notes'],
+};
+
+async function requestGeminiJson({ systemInstruction, prompt, schema, maxOutputTokens = 4096 }) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY no configurada');
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  const generationConfig = {
+    temperature: 0.8,
+    topP: 0.95,
+    maxOutputTokens,
+    responseMimeType: 'application/json',
+    responseSchema: schema,
+  };
+
+  if (DEFAULT_MODEL.includes('2.5')) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
+  try {
+    const response = await fetch(
+      `${GEMINI_ENDPOINT}/${DEFAULT_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Gemini respondió ${response.status}: ${detail.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const candidate = data?.candidates?.[0];
+    const finishReason = candidate?.finishReason ?? 'UNKNOWN';
+    const text = candidate?.content?.parts?.map((part) => part.text ?? '').join('') ?? '';
+
+    if (!text.trim()) {
+      throw new Error(`Gemini devolvió una respuesta vacía (finishReason=${finishReason})`);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error(`Gemini no devolvió JSON parseable (finishReason=${finishReason})`);
+      }
+      parsed = JSON.parse(match[0]);
+    }
+
+    const promptTokens = data?.usageMetadata?.promptTokenCount ?? null;
+    const outputTokens = data?.usageMetadata?.candidatesTokenCount ?? null;
+    const totalTokens = data?.usageMetadata?.totalTokenCount ?? (promptTokens ?? 0) + (outputTokens ?? 0);
+
+    return {
+      parsed,
+      finishReason,
+      textChars: text.length,
+      usage: { promptTokens, outputTokens, totalTokens },
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildFeedbackPrompt({ outcome, errors, daysCompleted, submissions }) {
+  const history = submissions
+    .slice(-10)
+    .map((submission) => {
+      const files = Object.entries(submission.files ?? {})
+        .map(([name, code]) => `--- ${name} ---\n${clampText(code, 1000)}`)
+        .join('\n');
+      return `DÍA ${submission.day} · PRUEBAS: ${submission.passed ? 'OK' : 'FALLO'}\n${files}`;
+    })
+    .join('\n\n');
+
+  return [
+    `RESULTADO FINAL: ${outcome === 'victory' ? 'VICTORIA (completó los 5 días)' : 'DERROTA'}`,
+    `DÍAS COMPLETADOS: ${daysCompleted} de 5`,
+    `ERRORES DE PRODUCCIÓN: ${errors} de 10`,
+    'HISTORIAL DE SOLUCIONES DEL OPERADOR:',
+    history || '(sin envíos registrados)',
+    '',
+    'Entrega tu evaluación final como JSON con summary, score (1-10) y notes.',
+  ].join('\n');
+}
+
+function buildFeedbackFallback({ outcome, errors, daysCompleted }) {
+  const base = outcome === 'victory' ? 8 : 3;
+  const penalty = Math.min(6, Math.floor(errors / 2));
+  const score = Math.max(1, Math.min(10, base + Math.min(2, daysCompleted) - penalty));
+
+  const summary =
+    outcome === 'victory'
+      ? `Completaste ${daysCompleted} turnos y el sistema sigue operativo. Tus parches resolvieron fallos entre módulos, aunque con ${errors} fallo(s) de producción acumulado(s).`
+      : `El turno terminó antes de completar los 5 días. Se registraron ${errors} fallo(s) de producción y ${daysCompleted} día(s) completado(s). El hospital necesita un enfoque más riguroso del flujo de datos entre módulos.`;
+
+  return {
+    summary,
+    score,
+    notes:
+      errors > 0
+        ? 'Revisa cómo se comunican los módulos antes de subir: un tipo incorrecto puede fallar varios pasos después.'
+        : 'Mantén el hábito de seguir el flujo de datos entre archivos antes de tocar código.',
+  };
+}
+
+export async function generateFeedback(req, res) {
+  const body = req.body ?? {};
+  const outcome = body.outcome === 'victory' ? 'victory' : 'game_over';
+  const errors = Number.isFinite(Number(body.errors)) ? Math.max(0, Math.min(50, Number(body.errors))) : 0;
+  const daysCompleted = Number.isFinite(Number(body.daysCompleted))
+    ? Math.max(0, Math.min(5, Number(body.daysCompleted)))
+    : 0;
+  const submissions = Array.isArray(body.submissions)
+    ? body.submissions
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => ({
+          day: Number.isFinite(Number(entry.day)) ? Number(entry.day) : 0,
+          passed: entry.passed === true,
+          files: normalizeFiles(entry.files),
+        }))
+    : [];
+
+  const prompt = buildFeedbackPrompt({ outcome, errors, daysCompleted, submissions });
+  const apiKey = process.env.GEMINI_API_KEY;
+  const startedAt = process.hrtime.bigint();
+  let result;
+  let provider;
+  let usage = null;
+  let finishReason = null;
+
+  logger.info('game.feedback.request', {
+    outcome,
+    errors,
+    daysCompleted,
+    submissions: submissions.length,
+    promptChars: prompt.length,
+    hasApiKey: Boolean(apiKey),
+  });
+
+  try {
+    if (!apiKey) {
+      result = buildFeedbackFallback({ outcome, errors, daysCompleted });
+      provider = 'mock';
+      logger.warn('gemini.skipped', { feedback: true, reason: 'missing_api_key' });
+    } else {
+      const gemini = await requestGeminiJson({
+        systemInstruction: FEEDBACK_SYSTEM_INSTRUCTION,
+        prompt,
+        schema: FEEDBACK_SCHEMA,
+        maxOutputTokens: 2048,
+      });
+
+      const summary = clampText(gemini.parsed?.summary, 1600).trim();
+      const notes = clampText(gemini.parsed?.notes, 900).trim();
+      const score = Number.parseInt(gemini.parsed?.score, 10);
+
+      if (!summary || !Number.isFinite(score)) {
+        throw new Error('La IA no devolvió feedback y score válidos');
+      }
+
+      result = { summary, notes, score: Math.max(1, Math.min(10, score)) };
+      provider = 'gemini';
+      usage = gemini.usage;
+      finishReason = gemini.finishReason;
+
+      logger.info('gemini.feedback.success', {
+        finishReason,
+        textChars: gemini.textChars,
+        ...usage,
+      });
+    }
+  } catch (error) {
+    logger.error('gemini.feedback.failed', { error: error.message });
+    result = buildFeedbackFallback({ outcome, errors, daysCompleted });
+    provider = 'fallback';
+  }
+
+  const latencyMs = Math.round(Number(process.hrtime.bigint() - startedAt) / 1e6);
+
+  try {
+    await recordLlmUsage({
+      day: daysCompleted,
+      provider,
+      model: provider === 'gemini' ? DEFAULT_MODEL : 'local-fallback',
+      status: outcome,
+      latencyMs,
+      finishReason,
+      promptTokens: usage?.promptTokens ?? null,
+      outputTokens: usage?.outputTokens ?? null,
+      totalTokens: usage?.totalTokens ?? null,
+    });
+  } catch (error) {
+    logger.error('llm.usage.record.failed', { error: error.message });
+  }
+
+  logger.info('game.feedback.response', {
+    provider,
+    outcome,
+    score: result.score,
+    latencyMs,
+    feedbackChars: result.summary.length,
+  });
+
+  res.json({
+    ok: true,
+    provider,
+    model: provider === 'gemini' ? DEFAULT_MODEL : 'local-fallback',
+    outcome,
+    score: result.score,
+    feedback: result.summary,
+    notes: result.notes ?? '',
+  });
+}
+
 const FALLBACK_SYSTEMS = [
   {
     context:
