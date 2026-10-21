@@ -56,12 +56,12 @@ const SYSTEM_INSTRUCTION = [
   '6. Cada archivo debe ser JavaScript válido, usar module.exports y require("./nombreDeArchivo.js"), con saltos de línea reales e indentación de 2 espacios. Nunca devuelvas todo el código en una sola línea.',
   '7. main.js es el punto de entrada: inicializa el sistema, requiere los otros módulos y contiene console.log de diagnóstico.',
   '8. "entryPoint": la clave del archivo que arranca el sistema. Normalmente "main.js".',
-  '9. El fallo debe ser SISTÉMICO, no una simple errata: un módulo exporta o entrega un tipo/estructura distinta de la que otro módulo espera, y eso hace fallar el flujo dos o tres pasos más adelante. Ejemplos: un módulo devuelve un String donde otro espera un Array; un módulo entrega un objeto plano donde otro espera una instancia; una clave inexistente que se propaga.',
-  '10. NO comentes ni marques el error. El código debe parecer correcto a simple vista; el operador debe seguir el flujo de datos entre archivos para encontrarlo.',
-  '11. "validationLogic": código JavaScript oculto para calificar. Puede usar require("./archivo.js") para cargar los módulos y console.log si lo desea. SIEMPRE debe terminar con return { passed: true|false, details: "..." }. Debe devolver passed:false con el sistema tal cual (sin corregir) y passed:true solo cuando el fallo se corrige. No dupliques los módulos aquí.',
-  '12. La complejidad del fallo debe crecer lentamente con el día.',
-  '13. Genera los archivos necesarios. El usuario no tiene la posibilidad de crear archivos nuevos',
-  '14. Empieza con problemas muy sencillos en los primeros días. A medida que el usuario avance en los días, aumento de a muy poco la complejidad de los problemas'
+  '9. El fallo debe ser SISTÉMICO y GARANTIZAR UN RESULTADO ERRÓNEO LÓGICO O UN CRASH: un módulo entrega un tipo/estructura distinta de la que otro espera, alterando los datos en pasos posteriores.',
+  '10. NO comentes ni marques el error en el código. El código debe parecer correcto a simple vista.',
+  '11. "validationLogic": código JavaScript oculto para calificar. DEBE usar require() para ejecutar el flujo principal o el módulo afectado, capturar su salida en una variable, y evaluar el valor estricto devuelto.',
+  '12. REGLA DE ORO DE VALIDACIÓN: El código inicial generado en "files" DEBE FALLAR esta prueba invariablemente. Diseña la lógica de validación verificando explícitamente el output (Ejemplo: `const res = require("./main.js")(); if (res === "resultado_con_bug" || !res) return { passed: false, details: "Fallo detectado" }; if (res === "resultado_esperado_correcto") return { passed: true, details: "Corregido" }; return { passed: false };`). NUNCA generes una prueba que devuelva true por defecto.',
+  '13. Genera los archivos necesarios. El usuario no tiene la posibilidad de crear archivos nuevos.',
+  '14. La complejidad del fallo debe crecer lentamente con el día. Empieza con problemas muy sencillos (ej. un campo mal nombrado en un objeto que devuelve undefined) y aumenta muy poco a poco la interdependencia.'
 ].join('\n');
 
 function prettyPrint(code) {
