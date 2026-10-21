@@ -12,6 +12,27 @@ function retryCooldownMs() {
   return Number(process.env.MONGO_RETRY_COOLDOWN_MS) || 60000;
 }
 
+function connectTimeoutMs() {
+  return Number(process.env.MONGODB_TIMEOUT_MS) || 3000;
+}
+
+function redactUri(uri) {
+  return uri.replace(/\/\/[^/@]*@/, '//***@');
+}
+
+function withDeadline(promise, ms, message) {
+  let timer;
+
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+
+  return {
+    promise: Promise.race([promise, deadline]),
+    clear: () => clearTimeout(timer),
+  };
+}
+
 export async function getDb() {
   const uri = process.env.MONGODB_URI;
 
@@ -28,11 +49,23 @@ export async function getDb() {
   }
 
   if (!connecting) {
-    const timeout = Number(process.env.MONGODB_TIMEOUT_MS) || 3000;
+    const timeout = connectTimeoutMs();
+    const pending = new MongoClient(uri, {
+      serverSelectionTimeoutMS: timeout,
+      timeoutMS: timeout,
+      connectTimeoutMS: timeout,
+      waitQueueTimeoutMS: timeout,
+    });
 
-    logger.info(`Conectando a MongoDB: ${uri}`);
+    logger.info(`Conectando a MongoDB: ${redactUri(uri)}`);
 
-    connecting = MongoClient.connect(uri, { serverSelectionTimeoutMS: timeout })
+    const deadline = withDeadline(
+      pending.connect(),
+      timeout,
+      `DNS/conexión a MongoDB excedió ${timeout}ms`,
+    );
+
+    connecting = deadline.promise
       .then((connected) => {
         client = connected;
         database = connected.db(process.env.MONGODB_DB || 'the_debugger');
@@ -41,10 +74,12 @@ export async function getDb() {
       })
       .catch((error) => {
         unavailableUntil = Date.now() + retryCooldownMs();
-        logger.error('mongo.unavailable', { error: error.message });
+        logger.error('mongo.unavailable', { error: error.message, timeout });
+        Promise.resolve(pending.close()).catch(() => {});
         return null;
       })
       .finally(() => {
+        deadline.clear();
         connecting = null;
       });
   }
