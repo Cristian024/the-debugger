@@ -30,6 +30,8 @@ export async function getDb() {
   if (!connecting) {
     const timeout = Number(process.env.MONGODB_TIMEOUT_MS) || 3000;
 
+    logger.info(`Conectando a MongoDB: ${uri}`);
+
     connecting = MongoClient.connect(uri, { serverSelectionTimeoutMS: timeout })
       .then((connected) => {
         client = connected;
